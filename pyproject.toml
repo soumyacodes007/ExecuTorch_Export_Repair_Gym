@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openenv-exicutorch-env"
+version = "0.1.0"
+description = "ExecuTorch Export Repair Gym for OpenEnv"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "openenv-core[core]>=0.2.1",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "openai>=1.0.0",
+    "torch>=2.11.0",
+    "executorch>=1.2.0",
+    "numpy>=1.26.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+server = "exicutorch_env.server.app:main"
+
+[tool.setuptools]
+include-package-data = true
+packages = ["exicutorch_env", "exicutorch_env.server"]
+package-dir = { "exicutorch_env" = ".", "exicutorch_env.server" = "server" }
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

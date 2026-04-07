@@ -1,0 +1,8 @@
+spec_version: 1
+name: executorch_export_repair_gym
+type: space
+runtime: fastapi
+app: server.app:app
+port: 7860
+description: "Fix tiny PyTorch models to be edge-deployable via ExecuTorch"
+tasks: [control_flow_guard, numpy_escape_hatch, edge_score_block]
