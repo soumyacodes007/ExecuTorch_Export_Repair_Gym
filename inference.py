@@ -14,11 +14,13 @@ except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from exicutorch_env import ExecutorchAction, ExecutorchEnv
 
-API_BASE_URL = os.getenv('API_BASE_URL', 'https://router.huggingface.co/v1')
-MODEL_NAME = os.getenv('MODEL_NAME', 'Qwen/Qwen2.5-72B-Instruct')
-HF_TOKEN = os.getenv('HF_TOKEN') or os.getenv('API_KEY')
-ENV_BASE_URL = os.getenv('ENV_BASE_URL', 'http://localhost:7860')
-LOCAL_IMAGE_NAME = os.getenv('LOCAL_IMAGE_NAME') or os.getenv('IMAGE_NAME')
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
+
 BENCHMARK = 'executorch_export_repair_gym'
 TASK_IDS = ['control_flow_guard', 'numpy_escape_hatch', 'edge_score_block']
 MAX_STEPS_PER_TASK = 20   # hard ceiling; actual limit comes from observation.max_steps
