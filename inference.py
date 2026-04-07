@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import sys
@@ -20,7 +21,7 @@ ENV_BASE_URL = os.getenv('ENV_BASE_URL', 'http://localhost:7860')
 LOCAL_IMAGE_NAME = os.getenv('LOCAL_IMAGE_NAME') or os.getenv('IMAGE_NAME')
 BENCHMARK = 'executorch_export_repair_gym'
 TASK_IDS = ['control_flow_guard', 'numpy_escape_hatch', 'edge_score_block']
-MAX_STEPS_PER_TASK = 8
+MAX_STEPS_PER_TASK = 20   # hard ceiling; actual limit comes from observation.max_steps
 SUCCESS_THRESHOLD = 0.90
 
 client = OpenAI(api_key=HF_TOKEN, base_url=API_BASE_URL)
@@ -31,18 +32,19 @@ SYSTEM_PROMPT = textwrap.dedent(
 
     Your job is to repair export-blocking model code while preserving behavior on hidden inputs.
     Prioritize these goals in order:
-    1. Preserve behavior on hidden inputs.
-    2. Make torch.export succeed.
+    1. Preserve behavior on hidden inputs (parity_score must be 1.0).
+    2. Make torch.export succeed (export_success must be True).
     3. Improve operator compatibility and lower successfully for ExecuTorch.
-    4. Avoid unnecessary edits.
+    4. Avoid unnecessary edits (extra patches reduce your score).
 
-    Use the structured action schema only. Good workflow:
-    - inspect the task/source if needed
-    - apply one focused repair patch at a time
-    - run_checks after edits
-    - submit_final only when the repair report looks strong
+    STRICT RULES — follow these exactly:
+    - ALWAYS call run_checks immediately after applying a patch. Never apply two patches in a row.
+    - NEVER apply the same patch_id twice — if it did not help, try a different approach.
+    - If current_score >= success_threshold AND checks_run > 0, call submit_final immediately.
+    - Use inspect actions only at the very start if you need context.
+    - The correct workflow is: [inspect once if needed] → apply_patch → run_checks → apply_patch → run_checks → submit_final.
 
-    Return exactly one valid JSON object with keys:
+    Use the structured action schema only. Return exactly one valid JSON object with keys:
     {
       "action_type": "inspect_task|inspect_source|inspect_fixes|inspect_report|apply_patch|run_checks|submit_final",
       "slot_name": "optional slot name",
@@ -77,9 +79,9 @@ def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> No
     )
 
 
-def _connect_env() -> ExecutorchEnv:
+async def _connect_env() -> ExecutorchEnv:
     if LOCAL_IMAGE_NAME:
-        return ExecutorchEnv.from_docker_image(LOCAL_IMAGE_NAME)
+        return await ExecutorchEnv.from_docker_image(LOCAL_IMAGE_NAME)
     return ExecutorchEnv(base_url=ENV_BASE_URL)
 
 
@@ -178,26 +180,38 @@ def _action_to_string(payload: dict[str, Any]) -> str:
     return '|'.join(parts)
 
 
-def run_task(env: ExecutorchEnv, task_id: str) -> float:
+async def run_task(env: ExecutorchEnv, task_id: str) -> float:
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
-    result = env.reset(task_id=task_id)
+    result = await env.reset(task_id=task_id)
     observation = result.observation
+    # Use the environment's own step limit so hard tasks get full budget
+    task_max_steps = observation.max_steps or MAX_STEPS_PER_TASK
     rewards: list[float] = []
     score = 0.0
     steps_taken = 0
     success = False
 
     try:
-        for step in range(1, MAX_STEPS_PER_TASK + 1):
-            payload = _call_llm(observation)
+        last_was_patch = False  # force run_checks after every apply_patch
 
-            if observation.current_score >= observation.success_threshold and observation.checks_run > 0:
+        for step in range(1, task_max_steps + 1):
+            # Hard rule: always check after patching — don't trust LLM to do it
+            if last_was_patch:
+                payload = {
+                    'action_type': 'run_checks',
+                    'slot_name': '',
+                    'patch_id': '',
+                    'rationale': 'enforced check after patch',
+                }
+            elif observation.current_score >= observation.success_threshold and observation.checks_run > 0:
                 payload = {
                     'action_type': 'submit_final',
                     'slot_name': '',
                     'patch_id': '',
                     'rationale': 'current report already satisfies target',
                 }
+            else:
+                payload = _call_llm(observation)
 
             action = ExecutorchAction(
                 action_type=payload.get('action_type', 'run_checks'),
@@ -206,7 +220,7 @@ def run_task(env: ExecutorchEnv, task_id: str) -> float:
                 rationale=payload.get('rationale', ''),
             )
             action_str = _action_to_string(payload)
-            result = env.step(action)
+            result = await env.step(action)
             observation = result.observation
             reward = float(result.reward or 0.0)
             rewards.append(reward)
@@ -224,6 +238,26 @@ def run_task(env: ExecutorchEnv, task_id: str) -> float:
             if result.done:
                 break
 
+            last_was_patch = (action.action_type == 'apply_patch')
+
+        # Safety net: if loop exhausted without submitting, force run_checks
+        # then submit to capture any patches the LLM applied but never validated.
+        if not result.done and observation.checks_run == 0:
+            result = await env.step(ExecutorchAction(action_type='run_checks'))
+            observation = result.observation
+            reward = float(result.reward or 0.0)
+            rewards.append(reward)
+            steps_taken += 1
+            log_step(step=steps_taken, action='run_checks', reward=reward, done=result.done, error=None)
+
+        if not result.done:
+            result = await env.step(ExecutorchAction(action_type='submit_final'))
+            observation = result.observation
+            reward = float(result.reward or 0.0)
+            rewards.append(reward)
+            steps_taken += 1
+            log_step(step=steps_taken, action='submit_final', reward=reward, done=result.done, error=None)
+
         score = float(observation.final_score or observation.current_score or observation.best_score)
         score = max(0.0, min(1.0, score))
         success = bool(observation.is_success) or score >= SUCCESS_THRESHOLD
@@ -233,12 +267,18 @@ def run_task(env: ExecutorchEnv, task_id: str) -> float:
     return score
 
 
-def main() -> None:
-    env = _connect_env()
+async def main() -> None:
+    env = await _connect_env()
     try:
-        scores = [run_task(env, task_id) for task_id in TASK_IDS]
+        scores = []
+        for task_id in TASK_IDS:
+            score = await run_task(env, task_id)
+            scores.append(score)
     finally:
-        env.close()
+        try:
+            await env.close()
+        except Exception:
+            pass
 
     if scores:
         average = sum(scores) / len(scores)
@@ -246,4 +286,4 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
