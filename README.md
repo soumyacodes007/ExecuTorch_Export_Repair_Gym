@@ -50,7 +50,7 @@ The tasks mirror common export repair work:
 
 ## Action space
 
-`ExicutorchAction`
+`ExecutorchAction`
 
 - `inspect_task`
 - `inspect_source`

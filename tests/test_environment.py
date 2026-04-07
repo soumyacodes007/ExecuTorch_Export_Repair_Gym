@@ -1,5 +1,5 @@
 from exicutorch_env.models import ExecutorchAction
-from exicutorch_env.server.exicutorch_env_environment import ExecutorchEnvironment
+from exicutorch_env.server.executorch_env_environment import ExecutorchEnvironment
 
 
 def test_reset_returns_task_metadata():

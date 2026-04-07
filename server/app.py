@@ -14,10 +14,10 @@ from openenv.core.env_server import create_app
 
 try:
     from exicutorch_env.models import ExecutorchAction, ExecutorchObservation
-    from exicutorch_env.server.exicutorch_env_environment import ExecutorchEnvironment
+    from exicutorch_env.server.executorch_env_environment import ExecutorchEnvironment
 except ModuleNotFoundError:
     from models import ExecutorchAction, ExecutorchObservation  # type: ignore[import-not-found]
-    from server.exicutorch_env_environment import ExecutorchEnvironment  # type: ignore[import-not-found]
+    from server.executorch_env_environment import ExecutorchEnvironment  # type: ignore[import-not-found]
 
 MAX_CONCURRENT_ENVS = int(os.environ.get('MAX_CONCURRENT_ENVS', '32'))
 ENABLE_WEB_INTERFACE = os.environ.get('ENABLE_WEB_INTERFACE', 'true').lower() == 'true'

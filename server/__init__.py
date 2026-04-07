@@ -1,3 +1,3 @@
-from .exicutorch_env_environment import ExecutorchEnvironment
+from .executorch_env_environment import ExecutorchEnvironment
 
 __all__ = ['ExecutorchEnvironment']

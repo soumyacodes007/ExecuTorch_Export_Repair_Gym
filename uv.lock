@@ -1381,7 +1381,7 @@ core = [
 ]
 
 [[package]]
-name = "openenv-exicutorch-env"
+name = "openenv-executorch-env"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

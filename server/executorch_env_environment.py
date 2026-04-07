@@ -312,6 +312,45 @@ class ExecutorchEnvironment(Environment[ExecutorchAction, ExecutorchObservation,
     def _is_supported_edge_op(self, op_name: str) -> bool:
         return any(keyword in op_name for keyword in SUPPORTED_EDGE_OPS)
 
+    def _current_source_preview(self) -> str:
+        lines = self._state.current_source.splitlines()
+        preview_lines = lines[:16]
+        preview = '\n'.join(preview_lines)
+        if len(lines) > 16:
+            preview += '\n...'
+        return preview
+
+    def _recommended_next_action(self, report: Dict[str, Any], done: bool) -> str:
+        if done:
+            return 'Episode complete. Reset to start a fresh repair task.'
+        if not self._state.last_report:
+            return 'Inspect the broken source or patch catalog, then apply one focused repair patch.'
+        if report.get('compile_error'):
+            return 'Repair the source so it becomes valid Python before running checks again.'
+        if report.get('runtime_error'):
+            return 'Fix the runtime behavior mismatch, then run checks again.'
+        if not report.get('export_success', False):
+            return 'Apply another export-safe repair and rerun checks.'
+        if report.get('operator_compatibility', 0.0) < 1.0:
+            return 'Replace unsupported operations with edge-friendly tensor ops, then rerun checks.'
+        if report.get('is_success', False):
+            return 'The repair looks good. Submit the final model.'
+        return 'Run checks after your next repair patch to confirm parity and export readiness.'
+
+    def _repair_summary(self, report: Dict[str, Any]) -> str:
+        if not report:
+            return 'No validation report yet. The current model is still in its default broken state.'
+        parts = [
+            f"parity={report.get('parity_score', 0.0):.2f}",
+            f"export={'ok' if report.get('export_success') else 'blocked'}",
+            f"ops={report.get('operator_compatibility', 0.0):.2f}",
+        ]
+        if report.get('lowering_available'):
+            parts.append(f"lowering={'ok' if report.get('lowering_success') else 'blocked'}")
+        if report.get('unsupported_ops'):
+            parts.append(f"unsupported={', '.join(report['unsupported_ops'][:3])}")
+        return ' | '.join(parts)
+
     def _slot_status(self) -> dict[str, str]:
         status: dict[str, str] = {}
         for slot_name in self._task.slot_order:
@@ -347,10 +386,13 @@ class ExecutorchEnvironment(Environment[ExecutorchAction, ExecutorchObservation,
             difficulty=self._task.difficulty,
             task_description=self._task.description,
             current_source=self._state.current_source,
+            current_source_preview=self._current_source_preview(),
             available_slots=list(self._task.slot_order),
             slot_status=self._slot_status(),
             patch_catalog=patch_catalog(self._task),
             supported_op_hints=list(self._task.supported_op_hints),
+            repair_summary=self._repair_summary(report),
+            recommended_next_action=self._recommended_next_action(report, done),
             export_success=bool(report.get('export_success', False)),
             lowering_success=bool(report.get('lowering_success', False)),
             lowering_available=bool(report.get('lowering_available', False)),

@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     ENABLE_WEB_INTERFACE=true \
     PATH="/root/.local/bin:${PATH}" \
-    PYTHONPATH="/app/env:${PYTHONPATH}"
+    PYTHONPATH="/app/env${PYTHONPATH:+:${PYTHONPATH}}"
 
 WORKDIR /app/env
 
