@@ -4,7 +4,8 @@ ENV PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
     PIP_NO_CACHE_DIR=1 \
     ENABLE_WEB_INTERFACE=true \
-    PATH="/root/.local/bin:${PATH}" \
+    VIRTUAL_ENV="/app/env/.venv" \
+    PATH="/app/env/.venv/bin:/root/.local/bin:${PATH}" \
     PYTHONPATH="/app/env${PYTHONPATH:+:${PYTHONPATH}}"
 
 WORKDIR /app/env
