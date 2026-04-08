@@ -5,7 +5,7 @@ from typing import Any, Dict
 from openenv.core import EnvClient
 from openenv.core.client_types import StepResult
 
-from .models import ExecutorchAction, ExecutorchObservation, ExecutorchState
+from models import ExecutorchAction, ExecutorchObservation, ExecutorchState
 
 
 class ExecutorchEnv(EnvClient[ExecutorchAction, ExecutorchObservation, ExecutorchState]):

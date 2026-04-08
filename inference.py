@@ -9,10 +9,12 @@ from typing import Any
 from openai import OpenAI
 
 try:
-    from exicutorch_env import ExecutorchAction, ExecutorchEnv
+    from models import ExecutorchAction
+    from client import ExecutorchEnv
 except ModuleNotFoundError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from exicutorch_env import ExecutorchAction, ExecutorchEnv
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from models import ExecutorchAction
+    from client import ExecutorchEnv
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
@@ -25,8 +27,6 @@ BENCHMARK = 'executorch_export_repair_gym'
 TASK_IDS = ['control_flow_guard', 'numpy_escape_hatch', 'edge_score_block']
 MAX_STEPS_PER_TASK = 20   # hard ceiling; actual limit comes from observation.max_steps
 SUCCESS_THRESHOLD = 0.90
-
-client = OpenAI(api_key=HF_TOKEN, base_url=API_BASE_URL)
 
 SYSTEM_PROMPT = textwrap.dedent(
     '''
@@ -132,6 +132,7 @@ def _build_user_prompt(observation: Any) -> str:
 def _call_llm(observation: Any) -> dict[str, Any]:
     user_prompt = _build_user_prompt(observation)
     try:
+        client = OpenAI(api_key=HF_TOKEN, base_url=API_BASE_URL)
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
@@ -261,7 +262,7 @@ async def run_task(env: ExecutorchEnv, task_id: str) -> float:
             log_step(step=steps_taken, action='submit_final', reward=reward, done=result.done, error=None)
 
         score = float(observation.final_score or observation.current_score or observation.best_score)
-        score = max(0.0, min(1.0, score))
+        score = max(0.001, min(0.999, score))  # Clamp to strictly between 0 and 1
         success = bool(observation.is_success) or score >= SUCCESS_THRESHOLD
     finally:
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)

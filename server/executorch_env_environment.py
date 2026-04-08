@@ -132,12 +132,14 @@ class ExecutorchEnvironment(Environment[ExecutorchAction, ExecutorchObservation,
             message = (message + ' ' if message else '') + 'Episode limit reached; auto-submitting current repair.'
 
         final_score = float((report or self._state.last_report or {}).get('current_score', 0.0))
+        # Clamp final_score to be strictly between 0 and 1 (validator requirement)
+        final_score = max(0.001, min(0.999, final_score)) if done else 0.0
         return self._make_observation(
             message=message,
             error=error,
             reward=reward,
             done=done,
-            final_score=final_score if done else 0.0,
+            final_score=final_score,
         )
 
     @property
@@ -238,6 +240,8 @@ class ExecutorchEnvironment(Environment[ExecutorchAction, ExecutorchObservation,
             + weights.get('lowering', 0.0) * float(report['lowering_success'])
         )
         report['current_score'] = round(weighted_sum / weight_total, 4) if weight_total else 0.0
+        # Clamp score to be strictly between 0 and 1 (validator requirement)
+        report['current_score'] = max(0.001, min(0.999, report['current_score']))
         report['is_success'] = bool(
             parity_score >= 0.999
             and report['export_success']
