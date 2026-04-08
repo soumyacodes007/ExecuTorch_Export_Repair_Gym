@@ -262,7 +262,7 @@ async def run_task(env: ExecutorchEnv, task_id: str) -> float:
             log_step(step=steps_taken, action='submit_final', reward=reward, done=result.done, error=None)
 
         score = float(observation.final_score or observation.current_score or observation.best_score)
-        score = max(0.001, min(0.999, score))  # Clamp to strictly between 0 and 1
+        score = max(0.01, min(0.99, score))  # Clamp to strictly between 0 and 1
         success = bool(observation.is_success) or score >= SUCCESS_THRESHOLD
     finally:
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)

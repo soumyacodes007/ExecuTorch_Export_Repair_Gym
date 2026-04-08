@@ -107,14 +107,14 @@ class ExecutorchEnvironment(Environment[ExecutorchAction, ExecutorchObservation,
                 self._state.last_report = report
                 self._state.checks_run += 1
                 self._state.best_score = max(self._state.best_score, report['current_score'])
-                reward = report['current_score']
+                reward = max(0.01, min(0.99, report['current_score']))  # Clamp reward
                 message = self._summarize_report(report)
             elif action.action_type == 'submit_final':
                 report = self._state.last_report or self._evaluate_current_source()
                 self._state.last_report = report
                 self._state.best_score = max(self._state.best_score, report['current_score'])
                 self._state.submitted = True
-                reward = report['current_score']
+                reward = max(0.01, min(0.99, report['current_score']))  # Clamp reward
                 done = True
                 message = 'Submitted final repaired model for scoring.'
             else:
@@ -127,13 +127,13 @@ class ExecutorchEnvironment(Environment[ExecutorchAction, ExecutorchObservation,
             report = self._state.last_report or self._evaluate_current_source()
             self._state.last_report = report
             self._state.best_score = max(self._state.best_score, report['current_score'])
-            reward = max(reward, report['current_score'])
+            reward = max(0.01, min(0.99, max(reward, report['current_score'])))  # Clamp reward
             done = True
             message = (message + ' ' if message else '') + 'Episode limit reached; auto-submitting current repair.'
 
         final_score = float((report or self._state.last_report or {}).get('current_score', 0.0))
         # Clamp final_score to be strictly between 0 and 1 (validator requirement)
-        final_score = max(0.001, min(0.999, final_score)) if done else 0.0
+        final_score = max(0.01, min(0.99, final_score)) if done else 0.0
         return self._make_observation(
             message=message,
             error=error,
@@ -241,7 +241,7 @@ class ExecutorchEnvironment(Environment[ExecutorchAction, ExecutorchObservation,
         )
         report['current_score'] = round(weighted_sum / weight_total, 4) if weight_total else 0.0
         # Clamp score to be strictly between 0 and 1 (validator requirement)
-        report['current_score'] = max(0.001, min(0.999, report['current_score']))
+        report['current_score'] = max(0.01, min(0.99, report['current_score']))
         report['is_success'] = bool(
             parity_score >= 0.999
             and report['export_success']
